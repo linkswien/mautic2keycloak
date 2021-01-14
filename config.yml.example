@@ -1,0 +1,13 @@
+mautic_auth:
+  host: https://mautic.example.org
+  username: foo
+  password: bar
+
+keycloak_auth:
+  server_url: https://sso.example.org/auth/
+  realm_name: foo
+  client_id: mautic-import
+  client_secret_key: 12345-121212-1212
+
+mautic:
+	transfer_constraint: fields:professional:ismember:1
