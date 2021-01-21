@@ -3,6 +3,7 @@
 from keycloak import KeycloakAdmin
 from keycloak.exceptions import KeycloakGetError
 from mautic import MauticAPI
+from unidecode import unidecode
 import datetime
 import yaml
 
@@ -30,10 +31,14 @@ class MauticKeycloakSyncer:
 		fields = contact['fields']['core']
 		first_name = fields['firstname']['value']
 		last_name = fields['lastname']['value']
+		username = f'{first_name[0]}.{last_name}'.lower()
 
-		username = contact['fields']['professional']['keycloak_username']['value']
-		if not username:
-			username = username = f'{first_name[0]}.{last_name}'.lower()
+		# Special handling for German non-ascii chars
+		for orig, new in {'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss', ' ': '-'}.items():
+			username = username.replace(orig, new)
+
+		# Remove remaining utf8 chars
+		username = unidecode(username)
 
 		return {
 			'email': fields['email']['value'],
