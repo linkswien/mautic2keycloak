@@ -86,17 +86,16 @@ class MauticKeycloakSyncer:
 			if e.response_code == 409:
 				# User exists
 				# FIXME reroll username and retry
-				print('exists')
-				return
+				raise SyncException('Username conflict')
 			else:
 				# Reraise for other API errors
 				raise e
 
 		self.assign_keycloak_roles(keycloak_id, contact)
 		self.mautic.update_contact(contact['id'], {
-			'keycloakid': keycloak_id,
-			'keycloaklastsync': sync_time,
-			'keycloak_username': kc_data['username']})
+			'keycloak_id': keycloak_id,
+			'keycloak_last_sync': sync_time,
+		})
 
 	def update_keycloak_user(self, sync_time, contact):
 		"""
@@ -105,19 +104,19 @@ class MauticKeycloakSyncer:
 		"""
 
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
-		keycloak_id = contact['fields']['professional']['keycloakid']['value']
+		keycloak_id = contact['fields']['professional']['keycloak_id']['value']
 
 		self.keycloak.update_user(keycloak_id, payload=kc_data)
 		self.assign_keycloak_roles(keycloak_id, contact)
-		self.mautic.update_contact(contact['id'], {'keycloaklastsync': sync_time})
+		self.mautic.update_contact(contact['id'], {'keycloak_last_sync': sync_time})
 
 	def sync_contact(self, contact):
 		"""
 		Synchronizes a single Mautic contact with Keycloak, either creating
 		a new Keycloak user or updating an existing one in the process.
 
-		Also updates the Mautic contact with the attributes (ID, username,
-		last synced) of the Keycloak user.
+		Also updates the Mautic contact with the attributes (ID, last synced)
+		of the Keycloak user.
 		"""
 
 		core_fields = contact['fields']['core']
@@ -134,22 +133,20 @@ class MauticKeycloakSyncer:
 		sync_time += datetime.timedelta(seconds=20)
 		sync_time = sync_time.isoformat()
 
-		# If Mautic contact has no keycloakid set, create new Keycloak user
-		if not prof_fields['keycloakid']['value']:
-			print('no keycloak id, need to create')
+		# If Mautic contact has no keycloak_id set, create new Keycloak user
+		if not prof_fields['keycloak_id']['value']:
 			self.create_keycloak_user(sync_time, contact)
 			return
 
 		# Otherwise, check if last_modified is newer than last_sync, and if so, update Keycloak user
-		last_sync = prof_fields['keycloaklastsync']['value']
+		last_sync = prof_fields['keycloak_last_sync']['value']
 		if not last_sync:
-			raise SyncException('Mautic contact has keycloakid, but no keycloaklastsync')
+			raise SyncException('Mautic contact has keycloak_id, but no keycloak_last_sync')
 
 		last_sync = datetime.datetime.fromisoformat(last_sync).replace(tzinfo=datetime.timezone.utc)
 		last_modified = datetime.datetime.fromisoformat(contact['dateModified'])
 
 		if last_modified >= last_sync:
-			print('modified, need to resync.')
 			self.update_keycloak_user(sync_time, contact)
 
 	def run(self):
