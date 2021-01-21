@@ -47,17 +47,24 @@ class MauticKeycloakSyncer:
 	def assign_keycloak_roles(self, keycloak_id, contact):
 		"""
 		Assigns the necessary realm roles to a Keycloak user based on the
-		segments + `bezirksgruppe` field in `contact`
+		custom contact fields
 
 		FIXME Remove roles – Need to get roles then do delta?
 		"""
 
-		role_names = set()
-		bg_num = contact['fields']['professional']['bezirksgruppe']['value']
-		if bg_num:
-			role_names.add(f'bg-{bg_num}')
+		role_names = set(self.config['mautic']['default_roles'])
 
-		# FIXME Handle missing roles
+		for field in self.config['mautic']['role_fields']:
+			values = contact['fields']['professional'][field]['value']
+			if values:
+				role_names |= set(values.split('|'))
+
+		for field, prefix in self.config['mautic']['prefixed_role_fields'].items():
+			value = contact['fields']['professional'][field]['value']
+			if value:
+				role_names.add(f'{prefix}{value}')
+
+		role_names = filter(lambda x: x in self.realm_roles, role_names)
 		roles = map(lambda x: self.realm_roles[x], role_names)
 		self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(roles))
 
