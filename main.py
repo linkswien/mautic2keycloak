@@ -59,12 +59,12 @@ class MauticKeycloakSyncer:
 
 		role_names = set(self.config['mautic']['default_roles'])
 
-		for field in self.config['mautic']['role_fields']:
+		for field in self.config['mautic'].get('role_fields', []):
 			values = contact['fields']['professional'][field]['value']
 			if values:
 				role_names |= set(values.split('|'))
 
-		for field, prefix in self.config['mautic']['prefixed_role_fields'].items():
+		for field, prefix in self.config['mautic'].get('prefixed_role_fields', {}).items():
 			value = contact['fields']['professional'][field]['value']
 			if value:
 				role_names.add(f'{prefix}{value}')

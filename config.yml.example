@@ -18,6 +18,7 @@ mautic:
     - arbeitsgruppen
     - interessensgruppen
     - gremium
+    - bezirksgruppe
 
-  prefixed_role_fields:
-    bezirksgruppe: bg-
+#  prefixed_role_fields:
+#    bezirksgruppe: bg-
