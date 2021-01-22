@@ -30,23 +30,12 @@ class MauticKeycloakSyncer:
 		"""
 
 		fields = contact['fields']['core']
-		first_name = fields['firstname']['value']
-		last_name = fields['lastname']['value']
-		username = f'{first_name[0]}.{last_name}'.lower()
-
-		# Special handling for German non-ascii chars
-		for orig, new in {'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss', ' ': '-'}.items():
-			username = username.replace(orig, new)
-
-		# Remove remaining utf8 chars
-		username = unidecode(username)
 
 		return {
 			'email': fields['email']['value'],
-			'username': username,
 			'enabled': True,
-			'firstName': first_name,
-			'lastName': last_name,
+			'firstName': fields['firstname']['value'],
+			'lastName': fields['lastname']['value'],
 			'attributes': {'mautic_id': contact['id'], 'last_sync': sync_time},
 		}
 
@@ -74,12 +63,28 @@ class MauticKeycloakSyncer:
 		roles = map(lambda x: self.realm_roles[x], role_names)
 		self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(roles))
 
+	def generate_username(self, contact):
+		fields = contact['fields']['core']
+		first_name = fields['firstname']['value']
+		last_name = fields['lastname']['value']
+		username = f'{first_name[0]}.{last_name}'.lower()
+
+		# Special handling for German non-ascii chars
+		for orig, new in {'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss', ' ': '-'}.items():
+			username = username.replace(orig, new)
+
+		# Remove remaining utf8 chars
+		return unidecode(username)
+
 	def create_keycloak_user(self, sync_time, contact):
 		"""
 		Creates a new Keycloak user based on the user data in `contact`
 		"""
 
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
+		kc_data['username'] = self.generate_username(contact)
+
+		print(f'Creating user {kc_data["firstName"]} {kc_data["lastName"]}')
 
 		try:
 			keycloak_id = self.keycloak.create_user(kc_data, exist_ok=False)
@@ -110,6 +115,8 @@ class MauticKeycloakSyncer:
 		"""
 
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
+
+		print(f'Updating user {kc_data["firstName"]} {kc_data["lastName"]}')
 		keycloak_id = contact['fields']['professional']['keycloak_id']['value']
 
 		self.keycloak.update_user(keycloak_id, payload=kc_data)
