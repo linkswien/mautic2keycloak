@@ -6,6 +6,7 @@ from mautic import MauticAPI
 from unidecode import unidecode
 import datetime
 import yaml
+import json
 
 
 class SyncException(Exception):
@@ -92,6 +93,11 @@ class MauticKeycloakSyncer:
 				raise e
 
 		self.assign_keycloak_roles(keycloak_id, contact)
+
+		# Trigger password reset / username config email
+		self.keycloak.send_update_account(user_id=keycloak_id, lifespan=604800,
+			payload=json.dumps(['UPDATE_PASSWORD', 'UPDATE_PROFILE']))
+
 		self.mautic.update_contact(contact['id'], {
 			'keycloak_id': keycloak_id,
 			'keycloak_last_sync': sync_time,
