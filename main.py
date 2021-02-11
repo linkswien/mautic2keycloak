@@ -1,9 +1,12 @@
 #!/usr/bin/python3
 
 from keycloak import KeycloakAdmin
-from keycloak.exceptions import KeycloakGetError
+from keycloak.urls_patterns import URL_ADMIN_USER_REALM_ROLES
+from keycloak.exceptions import KeycloakGetError, raise_error_from_response
 from mautic import MauticAPI
 from unidecode import unidecode
+from operator import itemgetter
+from traceback import print_exc
 import datetime
 import yaml
 import json
@@ -41,10 +44,8 @@ class MauticKeycloakSyncer:
 
 	def assign_keycloak_roles(self, keycloak_id, contact):
 		"""
-		Assigns the necessary realm roles to a Keycloak user based on the
+		Assign/remove the necessary realm roles of a Keycloak user based on the
 		custom contact fields
-
-		FIXME Remove roles – Need to get roles then do delta?
 		"""
 
 		role_names = set(self.config['mautic']['default_roles'])
@@ -59,9 +60,28 @@ class MauticKeycloakSyncer:
 			if value:
 				role_names.add(f'{prefix}{value}')
 
-		role_names = filter(lambda x: x in self.realm_roles, role_names)
-		roles = map(lambda x: self.realm_roles[x], role_names)
-		self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(roles))
+		want_roles = set(filter(lambda x: x in self.realm_roles, role_names))
+
+		have_roles = self.keycloak.get_realm_roles_of_user(keycloak_id)
+		have_roles = set(map(itemgetter('name'), have_roles))
+
+		remove_roles = have_roles - want_roles
+		add_roles = want_roles - have_roles
+
+		if remove_roles:
+			print('Remove roles:', remove_roles)
+			remove_roles = map(lambda x: self.realm_roles[x], remove_roles)
+
+			# API method missing from library
+			params_path = {"realm-name": self.keycloak.realm_name, 'id': keycloak_id}
+			data_raw = self.keycloak.raw_delete(URL_ADMIN_USER_REALM_ROLES.format(**params_path),
+				data=json.dumps(list(remove_roles)))
+			raise_error_from_response(data_raw, KeycloakGetError, expected_codes=[204])
+
+		if add_roles:
+			print('Add roles:', add_roles)
+			add_roles = map(lambda x: self.realm_roles[x], add_roles)
+			self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(add_roles))
 
 	def generate_username(self, contact):
 		fields = contact['fields']['core']
@@ -168,6 +188,7 @@ class MauticKeycloakSyncer:
 				self.sync_contact(contact)
 			except Exception as e:
 				print(f'Could not sync contact #{contact["id"]}: {e}')
+				print_exc()
 
 
 def main():
