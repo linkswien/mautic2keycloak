@@ -50,6 +50,10 @@ class MauticKeycloakSyncer:
 
 		role_names = set(self.config['mautic']['default_roles'])
 
+		for field, role in self.config['mautic'].get('boolean_role_fields', {}).items():
+			if contact['fields']['professional'][field]['value'] == '1':
+				role_names.add(role)
+
 		for field in self.config['mautic'].get('role_fields', []):
 			values = contact['fields']['professional'][field]['value']
 			if values:

@@ -10,15 +10,18 @@ keycloak_auth:
   client_secret_key: 12345-121212-1212
 
 mautic:
-  transfer_constraint: fields:professional:ismember:1
+  transfer_constraint: segment:keycloak-export
   default_roles:
-    - activist
+    - uma_authorization
+    - offline_access
+
+  boolean_role_fields:
+    activist: ismember
+    guest: guest
 
   role_fields:
     - arbeitsgruppen
     - interessensgruppen
     - gremium
     - bezirksgruppe
-
-#  prefixed_role_fields:
-#    bezirksgruppe: bg-
+    - specialroles
