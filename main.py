@@ -22,6 +22,10 @@ class MauticKeycloakSyncer:
 		self.mautic = MauticAPI(**config['mautic_auth'])
 		self.keycloak = KeycloakAdmin(**config['keycloak_auth'])
 
+		# Any Keycloak users whose ID is not in this set by the time we reach
+		# pass 2 will be deleted.
+		self.acceptable_keycloak_ids = set()
+
 		# Retrieve realm roles for use in assign_keycloak_roles
 		roles = self.keycloak.get_realm_roles()
 		self.realm_roles = {role['name']: role for role in roles}
@@ -132,6 +136,8 @@ class MauticKeycloakSyncer:
 			'keycloak_last_sync': sync_time,
 		})
 
+		return keycloak_id
+
 	def update_keycloak_user(self, sync_time, contact):
 		"""
 		Updates an existing Keycloak user with the Keycloak ID in `contact`
@@ -172,8 +178,11 @@ class MauticKeycloakSyncer:
 
 		# If Mautic contact has no keycloak_id set, create new Keycloak user
 		if not prof_fields['keycloak_id']['value']:
-			self.create_keycloak_user(sync_time, contact)
+			new_kid = self.create_keycloak_user(sync_time, contact)
+			self.acceptable_keycloak_ids.add(new_kid)
 			return
+
+		self.acceptable_keycloak_ids.add(prof_fields['keycloak_id']['value'])
 
 		# Otherwise, check if last_modified is newer than last_sync, and if so, update Keycloak user
 		last_sync = prof_fields['keycloak_last_sync']['value']
@@ -187,12 +196,20 @@ class MauticKeycloakSyncer:
 			self.update_keycloak_user(sync_time, contact)
 
 	def run(self):
+		print('Pass 1: Creating and updating Mautic contacts in Keycloak\n')
+
 		for contact in self.mautic.get_contacts(search=self.config['mautic']['transfer_constraint']):
 			try:
 				self.sync_contact(contact)
 			except Exception as e:
 				print(f'Could not sync contact #{contact["id"]}: {e}')
 				print_exc()
+
+		print('\nPass 2: Deleting Keycloak users not in Mautic\n')
+		for user in self.keycloak.get_users():
+			if user['id'] not in self.acceptable_keycloak_ids:
+				print(f'Deleting keycloak user {user["username"]} ({user.get("firstName")} {user.get("lastName")})')
+				self.keycloak.delete_user(user['id'])
 
 
 def main():
