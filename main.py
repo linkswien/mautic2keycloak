@@ -1,12 +1,15 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 from keycloak import KeycloakAdmin
 from keycloak.urls_patterns import URL_ADMIN_USER_REALM_ROLES
 from keycloak.exceptions import KeycloakGetError, raise_error_from_response
-from mautic import MauticAPI
-from unidecode import unidecode
+from systemd.journal import JournalHandler
 from operator import itemgetter
-from traceback import print_exc
+from unidecode import unidecode
+from mautic import MauticAPI
+from smtplib import SMTP
+from email.message import EmailMessage
+import logging
 import datetime
 import yaml
 import json
@@ -14,6 +17,46 @@ import json
 
 class SyncException(Exception):
 	pass
+
+
+class EmailLogStream:
+	"""A custom log stream that stores log messages and sends them as email"""
+
+	def __init__(self, src, dests, host='localhost', user=None, password=None):
+		self.logs = list()
+		self.src = src
+		self.dests = dests
+		self.host = host
+		self.user = user
+		self.password = password
+
+	def write(self, str):
+		self.logs.append(str)
+
+	def flush(self):
+		pass
+
+	def send_logs(self):
+		if not self.logs:
+			return
+
+		msg = EmailMessage()
+		msg.set_content(''.join(self.logs))
+		time = '{0:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+		msg['Subject'] = f'Mautic to Keycloak synchronization log {time}'
+		msg['From'] = self.src
+		msg['To'] = self.dests
+
+		with SMTP(self.host) as smtp:
+			smtp.starttls()
+
+			if self.user and self.password:
+				smtp.login(self.user, self.password)
+
+			smtp.send_message(msg)
+
+	def __str__(self):
+		return ''.join(self.logs)
 
 
 class MauticKeycloakSyncer:
@@ -77,7 +120,7 @@ class MauticKeycloakSyncer:
 		add_roles = want_roles - have_roles
 
 		if remove_roles:
-			print('Remove roles:', remove_roles)
+			logging.info(f'Remove roles: {remove_roles}')
 			remove_roles = map(lambda x: self.realm_roles[x], remove_roles)
 
 			# API method missing from library
@@ -87,7 +130,7 @@ class MauticKeycloakSyncer:
 			raise_error_from_response(data_raw, KeycloakGetError, expected_codes=[204])
 
 		if add_roles:
-			print('Add roles:', add_roles)
+			logging.info(f'Add roles: {add_roles}')
 			add_roles = map(lambda x: self.realm_roles[x], add_roles)
 			self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(add_roles))
 
@@ -112,7 +155,7 @@ class MauticKeycloakSyncer:
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
 		kc_data['username'] = self.generate_username(contact)
 
-		print(f'Creating user {kc_data["firstName"]} {kc_data["lastName"]}')
+		logging.info(f'Creating user {kc_data["firstName"]} {kc_data["lastName"]}')
 
 		try:
 			keycloak_id = self.keycloak.create_user(kc_data, exist_ok=False)
@@ -146,7 +189,7 @@ class MauticKeycloakSyncer:
 
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
 
-		print(f'Updating user {kc_data["firstName"]} {kc_data["lastName"]}')
+		logging.info(f'Updating user {kc_data["firstName"]} {kc_data["lastName"]}')
 		keycloak_id = contact['fields']['professional']['keycloak_id']['value']
 
 		self.keycloak.update_user(keycloak_id, payload=kc_data)
@@ -196,19 +239,18 @@ class MauticKeycloakSyncer:
 			self.update_keycloak_user(sync_time, contact)
 
 	def run(self):
-		print('Pass 1: Creating and updating Mautic contacts in Keycloak\n')
+		logging.debug('Pass 1: Creating and updating Mautic contacts in Keycloak')
 
 		for contact in self.mautic.get_contacts(search=self.config['mautic']['transfer_constraint']):
 			try:
 				self.sync_contact(contact)
 			except Exception as e:
-				print(f'Could not sync contact #{contact["id"]}: {e}')
-				print_exc()
+				logging.exception(f'Could not sync contact #{contact["id"]}: {e}')
 
-		print('\nPass 2: Deleting Keycloak users not in Mautic\n')
+		logging.debug('Pass 2: Deleting Keycloak users not in Mautic')
 		for user in self.keycloak.get_users():
 			if user['id'] not in self.acceptable_keycloak_ids:
-				print(f'Deleting keycloak user {user["username"]} ({user.get("firstName")} {user.get("lastName")})')
+				logging.info(f'Deleting keycloak user {user["username"]} ({user.get("firstName")} {user.get("lastName")})')
 				self.keycloak.delete_user(user['id'])
 
 
@@ -216,8 +258,15 @@ def main():
 	with open('config.yml', 'r') as file:
 		config = yaml.safe_load(file)
 
+	# Set up root logger for our custom email log stream + systemd journal
+	email_stream = EmailLogStream(**config['email'])
+	logging.basicConfig(stream=email_stream, level=logging.INFO, format='%(message)s')
+	logging.getLogger('').addHandler(JournalHandler())
+
 	syncer = MauticKeycloakSyncer(config)
 	syncer.run()
+
+	email_stream.send_logs()
 
 
 if __name__ == '__main__':

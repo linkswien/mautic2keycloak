@@ -25,3 +25,11 @@ mautic:
     - gremium
     - bezirksgruppe
     - specialroles
+
+email:
+  src: it@example.org
+  dests:
+    - it@example.org
+  host: smtp.example.org
+  user: foo
+  password: 'bar'
