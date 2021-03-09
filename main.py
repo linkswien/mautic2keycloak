@@ -247,11 +247,11 @@ class MauticKeycloakSyncer:
 			except Exception as e:
 				logging.exception(f'Could not sync contact #{contact["id"]}: {e}')
 
-		logging.debug('Pass 2: Deleting Keycloak users not in Mautic')
-		for user in self.keycloak.get_users():
-			if user['id'] not in self.acceptable_keycloak_ids:
-				logging.info(f'Deleting keycloak user {user["username"]} ({user.get("firstName")} {user.get("lastName")})')
-				self.keycloak.delete_user(user['id'])
+		#logging.debug('Pass 2: Deleting Keycloak users not in Mautic')
+		#for user in self.keycloak.get_users():
+		#	if user['id'] not in self.acceptable_keycloak_ids:
+		#		logging.info(f'Deleting keycloak user {user["username"]} ({user.get("firstName")} {user.get("lastName")})')
+		#		self.keycloak.delete_user(user['id'])
 
 
 def main():
