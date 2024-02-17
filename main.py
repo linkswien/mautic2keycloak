@@ -79,14 +79,14 @@ class MauticKeycloakSyncer:
 		a Keycloak API request
 		"""
 
-		fields = contact['fields']['core']
+		fields = contact['Fields']['core']
 
 		return {
 			'email': fields['email']['value'],
 			'enabled': True,
 			'firstName': fields['firstname']['value'],
 			'lastName': fields['lastname']['value'],
-			'attributes': {'mautic_id': contact['id'], 'last_sync': sync_time},
+			'attributes': {'mautic_id': contact['Id'], 'last_sync': sync_time},
 		}
 
 	def assign_keycloak_roles(self, keycloak_id, contact):
@@ -98,16 +98,16 @@ class MauticKeycloakSyncer:
 		role_names = set(self.config['mautic']['default_roles'])
 
 		for field, role in self.config['mautic'].get('boolean_role_fields', {}).items():
-			if contact['fields']['professional'][field]['value'] == '1':
+			if contact['Fields']['professional'][field]['value'] == '1':
 				role_names.add(role)
 
 		for field in self.config['mautic'].get('role_fields', []):
-			values = contact['fields']['professional'][field]['value']
+			values = contact['Fields']['professional'][field]['value']
 			if values:
 				role_names |= set(values.split('|'))
 
 		for field, prefix in self.config['mautic'].get('prefixed_role_fields', {}).items():
-			value = contact['fields']['professional'][field]['value']
+			value = contact['Fields']['professional'][field]['value']
 			if value:
 				role_names.add(f'{prefix}{value}')
 
@@ -135,7 +135,7 @@ class MauticKeycloakSyncer:
 			self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(add_roles))
 
 	def generate_username(self, contact):
-		fields = contact['fields']['core']
+		fields = contact['Fields']['core']
 		first_name = fields['firstname']['value']
 		last_name = fields['lastname']['value']
 		username = f'{first_name[0]}.{last_name}'.lower()
@@ -174,7 +174,7 @@ class MauticKeycloakSyncer:
 		self.keycloak.send_update_account(user_id=keycloak_id, lifespan=604800,
 			payload=json.dumps(['UPDATE_PASSWORD', 'UPDATE_PROFILE']))
 
-		self.mautic.update_contact(contact['id'], {
+		self.mautic.update_contact(contact['Id'], {
 			'keycloak_id': keycloak_id,
 			'keycloak_last_sync': sync_time,
 		})
@@ -190,11 +190,11 @@ class MauticKeycloakSyncer:
 		kc_data = self.prepare_keycloak_data(contact, sync_time)
 
 		logging.info(f'Updating user {kc_data["firstName"]} {kc_data["lastName"]}')
-		keycloak_id = contact['fields']['professional']['keycloak_id']['value']
+		keycloak_id = contact['Fields']['professional']['keycloak_id']['value']
 
 		self.keycloak.update_user(keycloak_id, payload=kc_data)
 		self.assign_keycloak_roles(keycloak_id, contact)
-		self.mautic.update_contact(contact['id'], {'keycloak_last_sync': sync_time})
+		self.mautic.update_contact(contact['Id'], {'keycloak_last_sync': sync_time})
 
 	def sync_contact(self, contact):
 		"""
@@ -205,8 +205,8 @@ class MauticKeycloakSyncer:
 		of the Keycloak user.
 		"""
 
-		core_fields = contact['fields']['core']
-		prof_fields = contact['fields']['professional']
+		core_fields = contact['Fields']['core']
+		prof_fields = contact['Fields']['professional']
 
 		if not all({core_fields['firstname']['value'], core_fields['lastname']['value'],
 			core_fields['email']['value']}):
@@ -233,7 +233,7 @@ class MauticKeycloakSyncer:
 			raise SyncException('Mautic contact has keycloak_id, but no keycloak_last_sync')
 
 		last_sync = datetime.datetime.fromisoformat(last_sync).replace(tzinfo=datetime.timezone.utc)
-		last_modified = datetime.datetime.fromisoformat(contact['dateModified'])
+		last_modified = datetime.datetime.fromisoformat(contact['DateModified'])
 
 		if last_modified >= last_sync:
 			self.update_keycloak_user(sync_time, contact)
@@ -245,7 +245,7 @@ class MauticKeycloakSyncer:
 			try:
 				self.sync_contact(contact)
 			except Exception as e:
-				logging.exception(f'Could not sync contact #{contact["id"]}: {e}')
+				logging.exception(f'Could not sync contact #{contact["Id"]}: {e}')
 
 		#logging.debug('Pass 2: Deleting Keycloak users not in Mautic')
 		#for user in self.keycloak.get_users():
