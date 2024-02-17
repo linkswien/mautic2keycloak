@@ -6,7 +6,7 @@ authors = ["Lukas Martini <hello@lutoma.org>"]
 license = "GPLv3"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.12"
 requests = "^2.25.0"
 requests-toolbelt = "^0.9.1"
 python-keycloak = { git = "https://github.com/lutoma/python-keycloak.git", rev = "6ed65ea4e51098e9eb805dbfd31f4a0ac62212a5" }
