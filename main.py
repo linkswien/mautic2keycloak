@@ -132,7 +132,7 @@ class MauticKeycloakSyncer:
 		if add_roles:
 			logging.info(f'Add roles: {add_roles}')
 			add_roles = map(lambda x: self.realm_roles[x], add_roles)
-			self.keycloak.assign_realm_roles(keycloak_id, 'dummy', list(add_roles))
+			self.keycloak.assign_realm_roles(keycloak_id, list(add_roles))
 
 	def generate_username(self, contact):
 		fields = contact['Fields']['core']
