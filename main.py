@@ -172,7 +172,7 @@ class MauticKeycloakSyncer:
 
 		# Trigger password reset / username config email
 		self.keycloak.send_update_account(user_id=keycloak_id, lifespan=604800,
-			payload=json.dumps(['UPDATE_PASSWORD', 'UPDATE_PROFILE']))
+			payload=['UPDATE_PASSWORD', 'UPDATE_PROFILE'])
 
 		self.mautic.update_contact(contact['Id'], {
 			'keycloak_id': keycloak_id,
